@@ -23,14 +23,14 @@
 <meta property="og:site_name" content="HanZhang&#39;s Blog">
 <meta property="og:description" content="使用 vscode 调试 Linux 内核 简单记录一下配置 vscode 从而调试 Linux 内核的过程，其中还有些疑惑  生成 Linux 内核配置文件首先生成 Linux 内核的配置文件，可以使用 make menuconfig 或者 make defconfig，这里使用 make menuconfig，然后将下述配置选项打开 1234567Kernel hacking  ---&gt;">
 <meta property="og:locale" content="en_US">
-<meta property="og:image" content="https://hanzhang-xyz.github.io/assets/debug-linux-kernel-by-vscode/2024-07-08-22-31-40.png">
+<meta property="og:image" content="https://hanzhang-xyz.github.io/img/debug-linux-kernel-by-vscode/2024-10-09-22-58-24.png">
 <meta property="article:published_time" content="2024-07-07T15:02:08.000Z">
-<meta property="article:modified_time" content="2024-09-21T05:23:54.255Z">
+<meta property="article:modified_time" content="2024-10-09T15:21:52.851Z">
 <meta property="article:author" content="Han Zhang">
 <meta property="article:tag" content="vscode">
 <meta property="article:tag" content="linux">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://hanzhang-xyz.github.io/assets/debug-linux-kernel-by-vscode/2024-07-08-22-31-40.png">
+<meta name="twitter:image" content="https://hanzhang-xyz.github.io/img/debug-linux-kernel-by-vscode/2024-10-09-22-58-24.png">
   
   
   
@@ -331,7 +331,7 @@
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs bash">python scripts/gen_compile_commands.py<br></code></pre></td></tr></table></figure>
 
 <p>重新启动 vscode 或 <code>restart language server</code>，这时打开文件最上方可能会有红色的提示，即报错，内容可能如下</p>
-<p><img src="/assets/debug-linux-kernel-by-vscode/2024-07-08-22-31-40.png" srcset="/img/loading.gif" lazyload alt="picture 0"></p>
+<p><img src="/../img/debug-linux-kernel-by-vscode/2024-10-09-22-58-24.png" srcset="/img/loading.gif" lazyload></p>
 <p>原因是因为 <code>compile_commands.json</code> 中的某些编译选项是 <code>gcc</code> 的，而 <code>clangd</code> 无法识别，所以暂时删除，方法是新建 <code>.clangd</code> 文件，内容如下</p>
 <blockquote>
 <p>这个文件具体有什么用呢？</p>
