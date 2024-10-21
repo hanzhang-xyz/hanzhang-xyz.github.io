@@ -16,23 +16,22 @@
   <meta name="author" content="Han Zhang">
   <meta name="keywords" content="">
   
-    <meta name="description" content="侵入式链表将链表的指针域放在数据结构中，而不是在链表节点中 适用于一个数据结构需要在多个链表中存在的情况  代码实现1234567891011121314151617181920212223struct ListNode &#123;  ListNode *next;  explicit ListNode() : next(nullptr) &#123;&#125;&#125;;template">
+    <meta name="description" content="这是一篇加密文章，需要密码才能继续阅读。">
 <meta property="og:type" content="article">
-<meta property="og:title" content="Intrusive Linked List">
-<meta property="og:url" content="https://hanzhang-xyz.github.io/2024/10/10/Intrusive-Linked-List/index.html">
+<meta property="og:title" content="CCA Code">
+<meta property="og:url" content="https://hanzhang-xyz.github.io/2024/10/17/CCA-Code/index.html">
 <meta property="og:site_name" content="HanZhang&#39;s Blog">
-<meta property="og:description" content="侵入式链表将链表的指针域放在数据结构中，而不是在链表节点中 适用于一个数据结构需要在多个链表中存在的情况  代码实现1234567891011121314151617181920212223struct ListNode &#123;  ListNode *next;  explicit ListNode() : next(nullptr) &#123;&#125;&#125;;template">
+<meta property="og:description" content="这是一篇加密文章，需要密码才能继续阅读。">
 <meta property="og:locale" content="en_US">
-<meta property="og:image" content="https://hanzhang-xyz.github.io/img/Intrusive-Linked-List/2024-10-10-20-17-50.png">
-<meta property="article:published_time" content="2024-10-10T12:03:52.000Z">
-<meta property="article:modified_time" content="2024-10-10T12:58:43.977Z">
+<meta property="article:published_time" content="2024-10-17T13:49:06.000Z">
+<meta property="article:modified_time" content="2024-10-17T14:09:03.726Z">
 <meta property="article:author" content="Han Zhang">
+<meta property="article:tag" content="Encrypted">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://hanzhang-xyz.github.io/img/Intrusive-Linked-List/2024-10-10-20-17-50.png">
   
   
   
-  <title>Intrusive Linked List - HanZhang&#39;s Blog</title>
+  <title>CCA Code - HanZhang&#39;s Blog</title>
 
   <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
 
@@ -227,7 +226,7 @@
       <div class="banner-text text-center fade-in-up">
         <div class="h2">
           
-            <span id="subtitle" data-typed-text="Intrusive Linked List"></span>
+            <span id="subtitle" data-typed-text="CCA Code"></span>
           
         </div>
 
@@ -243,8 +242,8 @@
     
       <span class="post-meta">
         <i class="iconfont icon-date-fill" aria-hidden="true"></i>
-        <time datetime="2024-10-10 20:03" pubdate>
-          October 10, 2024 pm
+        <time datetime="2024-10-17 21:49" pubdate>
+          October 17, 2024 pm
         </time>
       </span>
     
@@ -255,7 +254,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          351 words
+          405 words
         
       </span>
     
@@ -266,7 +265,7 @@
         
         
         
-          3 mins
+          4 mins
         
       </span>
     
@@ -311,30 +310,37 @@
       <div class="container nopadding-x-md" id="board-ctn">
         <div id="board">
           <article class="post-content mx-auto">
-            <h1 id="seo-header">Intrusive Linked List</h1>
+            <h1 id="seo-header">CCA Code</h1>
             
             
-              <div class="markdown-body">
-                
-                <h1 id="侵入式链表"><a href="#侵入式链表" class="headerlink" title="侵入式链表"></a>侵入式链表</h1><p>将链表的指针域放在数据结构中，而不是在链表节点中</p>
-<p>适用于一个数据结构需要在多个链表中存在的情况</p>
-<p><img src="/../img/Intrusive-Linked-List/2024-10-10-20-17-50.png" srcset="/img/loading.gif" lazyload></p>
-<h2 id="代码实现"><a href="#代码实现" class="headerlink" title="代码实现"></a>代码实现</h2><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs cpp"><span class="hljs-keyword">struct</span> <span class="hljs-title class_">ListNode</span> &#123;<br>  ListNode *next;<br>  <span class="hljs-function"><span class="hljs-keyword">explicit</span> <span class="hljs-title">ListNode</span><span class="hljs-params">()</span> : next(nullptr) &#123;</span>&#125;<br>&#125;;<br><br><span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">class</span> <span class="hljs-title class_">T</span>&gt; <span class="hljs-keyword">struct</span> <span class="hljs-title class_">Node</span> &#123;<br>  T val;<br>  ListNode node;<br><br>  <span class="hljs-function"><span class="hljs-keyword">explicit</span> <span class="hljs-title">Node</span><span class="hljs-params">(T val)</span> : val(val) &#123;</span>&#125;<br>&#125;;<br><br><span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">class</span> <span class="hljs-title class_">T</span>&gt; <span class="hljs-keyword">struct</span> <span class="hljs-title class_">List</span> &#123;<br>  ListNode *head;<br><br>  <span class="hljs-built_in">List</span>() : <span class="hljs-built_in">head</span>(<span class="hljs-literal">nullptr</span>) &#123;&#125;<br><br>  <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">push_front</span><span class="hljs-params">(T val)</span> </span>&#123;<br>    Node&lt;T&gt; *node = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Node</span>&lt;T&gt;(val);<br>    node-&gt;node.next = head;<br>    head = &amp;node-&gt;node;<br>  &#125;<br>&#125;;<br></code></pre></td></tr></table></figure>
+              
+              <div class="hbe hbe-container" id="hexo-blog-encrypt" data-wpm="抱歉，您输入的密码错误，请检查后重新输入。" data-whm="抱歉, 当前文章不能被校验, 不过您还是可以看看解密后的内容。">
+  <script id="hbeData" type="hbeData" data-hmacdigest="eb438b9b0af86d4a79cf25ad0174b0a07ed8ed12cf0f1c11d04cd84a4ae241fc">1d64b8828427f4e214bf0207e255852e1d74952253185854d31e12e7a123ede918f5203a6982019088ae719513985dd545f5a554c544bfc491c1bdf8b2ccc2afb79c455686d1d569b1bdd273b6b0fe24e571688ca157bef6262f46d57fc7c167a5d966d62884d56078ea7551944f2eae62fd6a4c88066770fc45114d0fb0b27b67fe6c9ca3ad99f3315f7367ba213af95d5612acc109a0f35d3ca2c6d43fbb6fcd7488a003ebb7925c6df7ceb81c87457a2d2e6544205ad66f3cb09c86136f526bcdece8b874345edcee4b34f87cb9eb8c5836f6d4e35f97a46c48e89f7ddde64983efe4f4321b920eb4827fe3d428d8b3b5ffe07fa05a21a59b84d0502702513703e7ae5351bcf6f005d00684e2083ba376360988324c86bc2467555f850697b258838e6db9a7f9257583d56df3519b9329563328007840af2e1853bce7cc46ca22d81346e62104b3e24670ce1fbde86672778a8b8e3e9864502dd6c0144545336433262c0a6a7bad493f9dafe34401168f37bee3d2c2a61f5b54cbb36d8ed4dcdb502d86600a6dc6d1ca1319d790c00462831f0f423ffb93fcc341bd258f7881879e8d015bdd9ce2c6f6205165e6b894c9dda9f1fa75293cb4356886dc4e7a651c87693dfacd86046d1f433b406708e2041723356497c95114608c0883dd63793202a1961df1896a259a634da092f670417476b2da3489c632f26be14d220aea89453b7030c6fdbdc1cb2ee576cc834dec936da9801cc056c502a2b9de9e187cbd6dbe20310d3049fe229377dbbbbad0a7ad50e407722db9c320207148b1bc3ecf790a3a873c3db40beff6f8ff144b886510b59459bd959aa3d2d0b002ff077011e3aa9195138f541b82a28eae40f51039a6598af88576e2b3ec47fe28e73793374a86256b637e855d62b6d56e47846d8336cc34e1c7518ebc8c21e2bc1bb16918290ad420f54ea34bf4aec0c9bbc3efd514c8280a56b8eccaea82a6a19d506e515275607f8c17f82b2427c0c92755ea2c3459f68a62d78867d8786acbe8f78bc2d21ba08c1a6b7d33cf7299d665482fb459a74cb4bea2b2c875d1cb2c647709844192eb7d8a4c7db657fad5bf5f1ffd118d04ecf994b163f06b103d423e114685387ef0626af0b22bcb01b5780c973f67a1eebf41734fd8ec7b3cb5a88c1e19a0abe4b74323557e248709bfefb1b97688c39f3c4feb7b103dec629900571415869ada44383112b93957e22e0132c57cbba4b06e55e1c6cfb512b7a9f31f85cff701ed0626c979096ba477bc417686b608c122b8fc40018543935ae4389e859c4e36e85cdf7bc0d79922f158c8c468f3e8f69f14ef63dfe6fd190d1a0954204e33200dd42b571acef2f90b77cc6f8ed339993e8a795f54a0015e194317d6d821358257e814311b309972c8aa7f252c66fabcba978f1eb3fcdc5300d5a8602afe6a69c5471f4ff714a4de542556166d48eeb973885357a6e77f067a728e9869f86d5e6ff5847d07e292fa7c68c898c808bccc39cb10574b1560ebcf79bdf8f61e58550549a981320d1ba8d43b8f0b28afdc2c9247718d1629ac612e6d5e28a13d29970167920de10740eb609b0756506a7a2a54cbec2f74638b1e6bdf388ae53e8059b734f3aaec95fe6cbacb9d6b65a8db79858dd92821596c6622c02aa82d4a648e76dc0225ff7e68b55e9a64107b97693c5c63b36b33368bd6cacee5a959179b79e8cd09fcafb6171d73bddb5b868ddb2647ee39834a0e97d0358d56216a80636c0ac30281f76de18bec996ffc6b176c3489afadbedbbc29911496186f0874aeddafb31f0e68886a18c758e09a549c3a760d86761ad8c9a60a64d0351cc255c0ac2aa529143529932a51c0a0c349512ab3c14f8d2bda0cae07e727b18d00ddcf07f6308e34482c3030ed589c7fd6beb712267082519a78ea52355a6beeb5e595c57778f8068133568b77e3b389c7cfecc7e359816633c8756642011638b32931740eb3e70ce0ee304ea110760d3e98254318e626205488ec1473e8e560cdde1e67c82666770594917954c1eaeb7b928da68e1fba8968a79dbfb85e9857d3c575f078717a3fe0a372025a397c31ed6be809c46417e913cefcfff1f5a507f1ec37cd03fc80534c5414ab7aa6c51abd5acb80ec018737d48dcc14d09f8d4eb99090e9d5b5d77c1558de075f0a8c66034a16a0d8b100619706efcdc33c241e9552fd917787f9030b2ee1c4d0e1043284b7135e1e39734f684ffe1cad92e7301b4539c5ac3f0a50c7936604d5063201a59c1f9cb0456b58b889a9a9bc1504dde07dd11c2432eb45d57346735de324ad6ffcd8432d0fbc6d93f36b688a8f93903833b594ca89a4563f542de6b0ed588e8720f0e5fa55103fdeffb9f0c2831cc37489b61b3134e2c50d1d0a0d409dec350611ba7585b53ed08f2fa197cceb9162dea25b556aa7a3dac9fb7035c6bd997e817344994ca5110abdf5559b978a15dfe8fcd607e6fa6aeee9f27a06095743c0c22a9eecc98a894703e105234ac9f92d994d510877e9893c9926ab990dff9b57acf8dc799e8c842899e0651e8eb8c421da07b63e080a3eaf94c369dcab1af5fa8e12af7923a69e11b64c4d19e6b9e433a02a79b0bb217e32505811b346e2d77fa024236100d7554c22aac9beca2142859ec39f1ac1b800c83e25bf470f67fbe1a1ef1b9b8b1f3fb0e111d4289e578fdb33dd39cb156c9a736aac54e6de368a85c9222f5b261a8843645379cbfeae9b9f88dc0a5cba5f45fe53ac23206726a29d3e262d435c11d59a2f1672cfd78f4ded40aa73a1f69a832777ec3b4c78d310d390ac2e393872e88c273615cfa8d418fde48c520812278f0a43f1b753182a17ebc3c4adaf8a45502d1c9f41580565884082c7836bc3e7ef2764383fb3fa0144e12f3aabe1e6210f3c487a7d549c3acae8a2a31aad8d7be8f5a49382275fcd38f2f00ea7d25cbbd5af43ef5b4b84198af76929dd6667a579ff2d44e9ba1470b2500e6c2af5e49a96fa6e014491d0d1ccfb52fedb168f74b23f2e1e163140867a0d96e259f083f75aa39079989ab59dc1b9ac567ecae0fc2662893a123ffa03ed3ab23db5dfbd1f6e092c6db85578536ff2eb2fdd3934e02bf07f5afec654112bf75b25ecb537b7d0d8ae3af535ab647d78b3ae189e103f4c6759dcc9ee8a8e4078df6ccedb20ff7df1726c8466a9d8ca501c012be3a8472c2c633feff9fa343f5b580d8426b94d265245d5adca5661f9936209cfc8f7c9efd4325e6d4daf6fdf8b94e597716fde7fc0fca4d8733455d036fbce7e804ef47c1015d2c1473f86c1fbc1e18f913dcbbfd1e9a6d182b9de2e97cee1014f5efa7ea84b8190cf103bdcee8256447218293bf1c444400fa7e1aac17e9ec4bd2bedecdf654828f0729f25fe88e102559a8503f42b5e7c5adc5df479dc695ac6f0915703f7f24beadc9516df86f974c60f31f0f1dcf3871405e694774b348f7ed57b63798b38c27dc230e32ddaaf411119e790711d080439c0e70c5fb831706fed5cc1e4be712e8c12aae839a55e0a281c82ab51afffb1cffe9f3f7b87cf2416913f5476f7f189b04cc329a416d91d9a71759685acaaeef855364d47de0a7869e39cb9364f8fcb20f96a86b621baa49aa24045425e2a502daf5f3be55712d897da4c448364e49733159b0da471907aae96a24ac754dde9860e8b03366d61f2093b4438ebd3703736e7f837f6f94125ff18d4c6499c7cf83fc7f0a852949b52a8756d8cf9ccc546ff783217a95caa3b2748a6751ca3e8c0e2a255fbe624f3c6f14a6b7ca2dca4b357e5460f323842d4c4a1c205aaf3fd290c849de21923caf556a1cecd65ad042fe871e5677f6864bc1be9703b7a0bf5fa0315581a1480c2ef896dcdca74df2a1a181ed73095e37e5aac1b781a405539a29d6b1e41d9133bd8b89f8b84cdfcbe6ef49b97edd00d71a9565ef8652c9ce477f6d935dd1590a77bf3e8af1eed411f3d1f7573534ff10e2b11af8bec56412851c75f2cddcab1a678b4a7884b41853c31546d1545a02146ec3bd10daca717433b06194a8ccc04fed00b326616ab7f6a43a28f972ff3273e9364254f479c5d7d95d69da605ca288f8d018a2ee4a78754261d038096aaf4e3a67fc9b1b4cf30f212d6a56838a25709e0018cc09c68b7ebd08747ee4220a16135539c101a90b180b2656d8dd8f97353e8414d3ffabd29a27d6cc394f7d9c7117d829a8743527f7ed11eaf7475e2b54df903595d0f8ebee5057ee0ef3f20c9808723dcdf0bbfd7e35881cf747d8f37099253e35c1459821c3a088ff03b7a2fc51661b27719f7d11ff7612514afc53aabdbd97efa2ec3b0a27671f3fe66a574b8980dce0ce4742fd94d576f19e6f065ed47e0213f38153762622f4461e04e292ce5789ed68fb8ef1bdf66d00cd88cb54d8cd50e03b409fd874c0a92049d37fb9f7522894834a36fe8d62984a5234db6ddea78b631caa09009f6ea6c065170df67aa086921f0ab2e1920792e7ba995b35cf6da310ff1e66d5f15db9fb0cecf92d295907282d0a4f2cc30f707dd79f8ce21969cfe9b436ac255c2388137d08b2eb6cf3906e402cdb6227659077a4257bab14d0253f8103afd1c894dae8dc6fe3f458e1bdebf999797550096b908aef1a440a994c72ccb3cb14a17caac20302bda36a7734c088b6f299d31fa0bd1e8efd810a044d87bfe9f1184a0e23c114b697ea20d995a5d07a63a7148ab0a831039630ab5ed8416b3a6a2d80a627c15db3568</script>
+  <div class="hbe hbe-content">
+    <div class="hbe hbe-input hbe-input-default">
+      <input class="hbe hbe-input-field hbe-input-field-default" type="password" id="hbePass">
+      <label class="hbe hbe-input-label hbe-input-label-default" for="hbePass">
+        <span class="hbe hbe-input-label-content hbe-input-label-content-default">当前文章暂不对外可见，请输入密码后查看！</span>
+      </label>
+    </div>
+  </div>
+</div>
+<script data-pjax src="/lib/hbe.js"></script><link href="/css/hbe.style.css" rel="stylesheet" type="text/css">
+              
 
-<p>变量使用 C 语言的宏定义，可以通过 struct 的成员变量指针获取到结构体的地址</p>
-<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs cpp"><span class="hljs-meta">#<span class="hljs-keyword">define</span> list_entry(type, member, ptr) container_of(type, member, ptr)</span><br><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> container_of(type, member, ptr)                                        \</span><br><span class="hljs-meta">  (&#123;                                                                           \</span><br><span class="hljs-meta">    const typeof(((type *)0)-&gt;member) *__mptr = (ptr);                         \</span><br><span class="hljs-meta">    (type *)((char *)__mptr - offsetof(type, member));                         \</span><br><span class="hljs-meta">  &#125;)</span><br><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> offsetof(type, member) ((size_t) &amp; ((type *)0)-&gt;member)</span><br><br><span class="hljs-function"><span class="hljs-type">int</span> <span class="hljs-title">main</span><span class="hljs-params">()</span> </span>&#123;<br>  List&lt;<span class="hljs-type">int</span>&gt; list = <span class="hljs-built_in">List</span>&lt;<span class="hljs-type">int</span>&gt;();<br>  <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> i = <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">10</span>; i++) &#123;<br>    list.<span class="hljs-built_in">push_front</span>(i);<br>  &#125;<br>  <span class="hljs-keyword">auto</span> *head = list.head;<br>  <span class="hljs-keyword">while</span> (head != <span class="hljs-literal">nullptr</span>) &#123;<br>    std::cout &lt;&lt; <span class="hljs-built_in">list_entry</span>(Node&lt;<span class="hljs-type">int</span>&gt;, node, head)-&gt;val &lt;&lt; std::endl;<br>    head = head-&gt;next;<br>  &#125;<br>  <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
-
-<h2 id="trick"><a href="#trick" class="headerlink" title="trick"></a>trick</h2><p>在 C 语言的宏定义中，<code>(&#123;&#125;)</code> 是 GNU C 扩展中的一种语法，称为 语句表达式（Statement Expressions）。允许在宏或代码中使用多个语句，并返回最后一行的一个值（使用这种语法最后一行需要加上<code>;</code>，如果只使用 <code>&#123;&#125;</code>，也可以返回最后一行的值，同时不用加上<code>;</code>）</p>
-<p>下面两种写法都是合法的</p>
-<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs cpp"><span class="hljs-type">int</span> a = &#123;<span class="hljs-number">1</span>&#125;;<br><span class="hljs-type">int</span> b = (&#123;<span class="hljs-number">1</span>;&#125;);<br></code></pre></td></tr></table></figure>
-
-                
-              </div>
+              
             
             <hr/>
             <div>
               <div class="post-metas my-3">
   
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/Encrypted/" class="print-no-link">#Encrypted</a>
+      
+    </div>
   
 </div>
 
@@ -344,8 +350,8 @@
 
   <div class="license-box my-3">
     <div class="license-title">
-      <div>Intrusive Linked List</div>
-      <div>https://hanzhang-xyz.github.io/2024/10/10/Intrusive-Linked-List/</div>
+      <div>CCA Code</div>
+      <div>https://hanzhang-xyz.github.io/2024/10/17/CCA-Code/</div>
     </div>
     <div class="license-meta">
       
@@ -357,7 +363,7 @@
       
         <div class="license-meta-item license-meta-date">
           <div>Posted on</div>
-          <div>October 10, 2024</div>
+          <div>October 17, 2024</div>
         </div>
       
       
@@ -389,18 +395,12 @@
                   <article class="post-prev col-6">
                     
                     
-                      <a href="/2024/10/17/CCA-Code/" title="CCA Code">
-                        <i class="iconfont icon-arrowleft"></i>
-                        <span class="hidden-mobile">CCA Code</span>
-                        <span class="visible-mobile">Previous</span>
-                      </a>
-                    
                   </article>
                   <article class="post-next col-6">
                     
                     
-                      <a href="/2024/09/28/Arm-Confidential-Compute-Architecture/" title="Arm Confidential Compute Architecture">
-                        <span class="hidden-mobile">Arm Confidential Compute Architecture</span>
+                      <a href="/2024/10/10/Intrusive-Linked-List/" title="Intrusive Linked List">
+                        <span class="hidden-mobile">Intrusive Linked List</span>
                         <span class="visible-mobile">Next</span>
                         <i class="iconfont icon-arrowright"></i>
                       </a>
@@ -612,6 +612,23 @@
   
 
 
+
+
+  
+  <script defer>
+    if (document.getElementById('hbePass') || document.querySelector('hbe-prefix')) {
+      Fluid.utils.waitElementLoaded('hbe-prefix', function() {
+        var hbePrefix = document.querySelector('hbe-prefix');
+        hbePrefix.parentElement.classList.add('markdown-body');
+        Fluid.utils.retry(function() {
+          if (Fluid.boot && Fluid.boot.refresh) {
+            Fluid.boot.refresh();
+            return true;
+          }
+        }, 100, 10);
+      })
+    }
+  </script>
 
 
   
