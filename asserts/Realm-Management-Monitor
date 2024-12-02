@@ -1,0 +1,594 @@
+---
+title: Realm Management Monitor
+date: 2024-10-21 19:00:13
+tags:
+- Encrypted
+- TrustedFirmware
+---
+
+# Realm Management Monitor
+
+![](../img/Realm-Management-Monitor/2024-10-18-11-24-57.png)
+
+Realm VM 由 Noraml World Hypervisor 启动和控制。为实现对 Realm VM 的隔离执行，引入了 Realm Management Monitor(RMM)，在 R_EL2 执行。 Hypervisor 通过 Realm Management(RMI) 与 RMM 交互，以管理 Realm VM。 诸如运行哪个 Realm 或将哪些内存委托给 Realm 等策略决策由 Hypervisor 作出，并通过 RMI 传达。 RMM 还通过 Realm Service Interface(RSI) 为 Realm 提供服务。 这些服务包括加密服务和验证。可以测量 Realm 初始状态，并通过 RSI 申请认证报告，其中也包括平台认证。 RSI 还是 Realm VM 向 RMM 提出内存管理请求的通道
+
+TF-RMM 通过 RMM-EL3 Communication Interface 与 Root EL3 Firware 交互，EL3 Firware 实现参考 TF-A
+
+## Locking Guidelines
+
+### Introduction
+
+RMM 不包括 **memory allocator**，它依赖于 **untrusted caller** 提供用于保存 meta data 的 **memory granule**，以管理 Realm 以及 Realm 的代码和数据
+
+RMM 通过保持对 **the state of each granule** 的感知，并制定规则管理 **how memory granules can transition from one state to another and how a granule can be used depending on its state**
+
+RMM 支持的操作性质复杂，例如在管理 Realm 的页表时，RMM 必须能够同时为多个对象加锁，因此很容易照成死锁。通常的避免死锁方案是根据对象的某些属性指定加锁顺序，例如对象的内存地址等。但 RMM 会从 untrusted caller 那里收到不透明的指针，因此它无法在锁定对象之前判断对象是否确实处于预期状态。此外，MMU 页表是分层数据结构，对页表的操作通常必须能够根据 virtual address 定位到分层结构中的叶节点，因此必须按分层顺序走页表。这意味着，在获得 page table 层次结构中至少一个对象的锁之前，在 RMM 中执行的进程不知道相同 **Granule State** 的对象的顺序
+
+### Implementation
+
+RMM 通过为系统中每一个 memory granule 定义一个数据结构来维护 **granule state**。该数据结构包含以下字段：
+
+- Granule State
+
+- Lock
+
+- Reference Count
+
+Lock 提供了互斥功能，进程可以访问 the shared granule data structure and the shared meta data，这些数据可能存储在处于 Realm Descriptor(RD)、Realm Execution Context(REC) 和 Table State 之一的 memory granule 中。描述 memory granule 的数据结构和 memory granule 本身的内容都可以被多个 PE 并发访问，因此需要并发协议来避免共享数据结构的损坏
+
+Reference Count 字段用于跟踪 granule 之间的引用情况。例如，RD 描述 Realm，REC 描述该 Realm 中的一个执行上下文，因此，当 REC 存在时，RD 必须始终存在。 为防止 RMM 在 REC 仍存在时销毁 RD，RMM 会为与同一 Realm 相关联的每个 REC 保留 RD 的引用计数，只有当 Realm 中的所有 REC 都已销毁，且 RD 的引用计数降为零时，才能销毁 RD 并将 granule 重新用于其他用途
+
+在上述基础上，下面来描述 granule state 字段和目前 locking/refcount 的实现：
+
+- UnDelegated：对于这些 granule，RMM 不会阻止其他 agent 修改 granule 的 Physical Address Space(PAS)。 在这种状态下，granule content 不受 granule::lock 保护，因为它总是受到来自 Non-Realm 世界的读写
+
+- Delegated：这些 granule 的内存只能由 RMM 访问。granule content 受 granule::lock 保护。此 granule state 不保留引用计数
+
+- Realm Descriptor(RD)：这些 granule 包含描述 Realm 的 meta data，只有 RMM 可以访问。 granule content 受 granule::lock 保护。为每个相关的 REC granule 保存一个引用计数
+
+- Realm Execution Context(REC)：这些 granule 包含描述一个 Realm 中运行的虚拟 PE 的 meta data，只有 RMM 可以访问。execution content 的访问不受 granule::lock 的保护，因为我们无法在持有锁的情况下进入 Realm。以下规则适用于该 granule 的 reference count：
+
+    - 当 REC 运行时，该 granule 上会有一个 reference count
+
+    - 由于 REC 不能同时在两个 PE 上运行，因此 reference count 的最大值为 1
+
+    - 进入 REC 时，granule::lock 锁定，reference count 会原子式递增(设为 1)
+
+    - 当 REC 退出时，granule::lock 释放，reference count 会原子释放(设置为 0)
+
+    - 当 reference 被持有时，RMM 可以在 REC 的入口和出口路径上访问 granule's content
+
+- Translation Table：这些 granule 包含描述 Realm 虚拟地址到物理地址转换的元数据，由 RMM 和硬件内存管理单元 (MMU) 访问。 granule content 访问受 granule::lock 保护，但 hardware translation table walks 可能在任意时刻读取 Realm Translation Table(RTT)。仅在多个 granule 处于这种状态，并且它们是同一棵树的一部分，那么它们可以同时被锁定，并且只能按照从根到叶的拓扑顺序锁定。连接 root level RTT 的拓扑顺序是从最低地址到最高地址。 RTT granule 的完整内部锁定顺序是 RD -> [RTT] -> ... -> RTT。对于 RTT 中每个引用 granule 的条目，都会在该 granule 上持有一个引用计数：
+
+    - Table s2tte(stage 2 translation table entry)
+
+    - Valid s2tte
+
+    - Valid_NS s2tte
+
+    - Assigned s2tte
+
+- Data：这些 granule 包含 Realm 数据，可由 RMM 及对应 Realm 访问。granule content 的访问不受 granule::lock 的保护，因为它总受 Realm 内部读写的影响。此状态下的 granule 总是被 RTT granule 中的一个条目引用，而该条目必须在锁定此 granule 之前被锁定。在给定的 PE 上，一次只能锁定一个 DATA granule。 DATA granule 的完整内部锁定顺序是 RD -> RTT -> RTT -> ... -> DATA。该 granule type 不保存 reference count
+
+## RMM 流程
+
+
+## RSI 代码解析
+
+1. rmm_entry
+
+2. smc_ret
+
+3. rmm_handler（这个好像是个循环自调）
+
+```assembly
+func rmm_handler
+    ...
+    smc    #0
+
+    /* Continue the rmm handling loop */
+    b    rmm_handler
+endfunc rmm_handler
+```
+
+4. handle_ns_smc
+
+根据 function_id 获取 handler_id，从 smc_handlers 中获取 handler，调用对应的 handler
+
+```c
+if (handler_id < ARRAY_SIZE(smc_handlers)) {
+    handler = &smc_handlers[handler_id];
+}
+```
+
+5. smc_rec_enter
+
+    总体而言，根据 `rec_run_addr` 获取 `rec_run.enter`，根据 `rec_addr` 获取 `rec`，将 `rec_run.exit` 清空，并通过 `rec_run.enter` 来更新 `rec`，同时有大量判断 `rec` 和 `rec_run` 的合法性
+
+    ```c
+    unsigned long smc_rec_enter(unsigned long rec_addr, unsigned long rec_run_addr) {
+        struct granule *g_rec;
+        struct granule *g_run;
+        struct rec *rec;
+        struct rd *rd;
+        struct rmi_rec_run rec_run;
+        unsigned long realm_state, ret;
+    }
+    ```
+    - 初始化 `rec_run.exit` 为空
+
+    - 找到 rec_run_addr 对应的 granule `g_run`
+
+    - 找到 rec_addr 对应的 granule `g_rec`，并对其 ref count 加 1
+
+    - 将 `g_run` 对应的 granule 数据拷贝到 `rec_run.enter`
+
+    - 将 `g_rec` 对应的 granule 映射到 `rec` 中，同理将 `rec->realm_info.g_rd` 映射到 `rd`，通过 `rd` 获得 `realm_state`
+
+    - 判断 `realm_state`，如果不是 `REALM_ACTIVE`，直接错误返回
+
+    - 判断 `rec` 是否合法
+
+    - 判断 `rec_run.enter` 的 gicv3_lrs 是否合法
+
+    - 通过 `rec_run.enter` 的 gicv3_lrs 和 gicv3_hcr 更新 `rec->sysregs.gicstate` 的 ich_lr_el2 和 ich_hcr_el2
+
+    - 判断 sea_insertion 和 mmio_emulation 是否已完成
+
+    - 通过 `rec_run.enter.flags` 更新 `rec->set_ripas.response`
+
+    - 设置 `rec->regs` 和 `rec->set_ripas` 的部分信息
+
+    - 检查 sysreg_emulation 是否已完成，
+
+    - 判断 host_call 是否已完成
+
+    - 重新设置 `rec->last_run_info.esr` 为 0
+
+    - 设置 `rec->sysregs.hcr_el2`
+
+    - 进入 rec_run_loop
+
+6. rec_run_loop
+
+    ```c
+    void rec_run_loop(struct rec *rec, struct rmi_rec_exit *rec_exit) {
+        int realm_exception_code;
+        void *rec_aux;
+    }
+    ```
+
+    - 更新 `rec->ns` 为当前 cpu 的 ns_state
+
+    - 映射 `res->aux`（辅助 granule 数组）
+
+    - 将证明堆 `&rec->aux_data.attest_data->alloc_ctx` 与当前 cpu 绑定，将在 REC 运行时用于证明 RSI 调用
+
+    - 保存非安全状态的部分寄存器信息至 `rec` 中
+
+    - 从 `rec` 中恢复 Realm 的部分寄存器信息
+
+    - 将当前 cpu 的 simd_context 保存至 `rec->active_simd_ctx`
+
+    - 循环处理 Realm 的异常和中断
+
+        - 获取 cptr_el2 寄存器信息
+
+        - 检查 `rec` 是否有挂起的定时器，如果有，设置退出原因为 `RMI_EXIT_IRQ` 并退出
+
+        - 激活与 `rec` 相关的事件
+
+        - 如果 cptr_el2 寄存器的值与之前读取的不一致，则恢复 rec 的 cptr_el2 值，并执行指令同步屏障
+
+        - 恢复和保存 PAuth 密钥
+
+        - 运行 Realm 并获取异常代码
+
+        - 保存 Realm 的 PAuth 密钥至 `rec->pauth` 中
+
+        - 恢复 RMM 的 PAuth 密钥
+
+        - 再次比较 cptr_el2 寄存器的值与之前读取，不一致则恢复 rec 的 cptr_el2 值，并执行指令同步屏障
+
+        - 处理 Realm 退出，调用 handle_realm_exit
+
+7. handle_realm_exit
+
+    处理异常退出的函数，根据不同的异常类型执行相应的处理逻辑，并返回一个布尔值来指示是否成功处理了异常
+
+    ```c
+    bool handle_realm_exit(struct rec *rec, struct rmi_rec_exit *rec_exit, int exception)
+    ```
+
+    函数通过 switch 语句根据 exception 的值来处理不同类型的异常：
+
+    1. ARM_EXCEPTION_SYNC_LEL
+
+        - 设置 rec_exit->exit_reason 为 RMI_EXIT_SYNC。
+
+        - 调用 handle_exception_sync 处理同步异常，并根据返回值决定是否更新 rec->last_run_info 中的 ESR、FAR 和 HPFAR
+
+
+8. handle_exception_sync
+
+    ```c
+    static bool handle_exception_sync(struct rec *rec, struct rmi_rec_exit *rec_exit)
+    ```
+
+    用于处理同步异常（synchronous exceptions）。根据异常状态寄存器（ESR, Exception Syndrome Register）的值来决定如何处理异常，并返回一个布尔值，指示异常是否已被处理
+
+    - 读取异常状态寄存器 ESR
+
+    - 根据异常类型处理异常
+
+    - 处理 SMC 异常，调用 handle_realm_rsi 函数处理，并返回其结果
+
+9. handle_realm_rsi
+
+    处理特定的 SMC（Secure Monitor Call）调用，并根据调用的类型执行相应的操作。返回一个布尔值，指示是否应继续在 REC（Realm Execution Context）中执行，或者返回到 REC 的调用者。
+
+    ```c
+    static bool handle_realm_rsi(struct rec *rec, struct rmi_rec_exit *rec_exit) {
+        struct rsi_result res = { 0 };
+        unsigned int function_id = (unsigned int)rec->regs[0];
+        bool restore_simd_ctx = false;
+        unsigned int i;
+    }
+    ```
+
+    - 记录日志
+
+    - 保存寄存器值至 `res.smc_res.x`
+
+    - 处理 SVE 提示位
+
+    - 检查是否需要 FPU
+
+    - 根据不同的函数 id 处理不同的 SMC 调用
+
+### handle_ns_smc
+
+handler_id = (function_id & 0xffff) - 0x150
+
+### smc_granule_delegate
+
+> 将传入的物理地址的管理权转移到安全世界
+
+1. addr：某个物理地址
+
+find_lock_granule：获取物理地址对应的 granule 并锁定 {
+    plat_granule_addr_to_idx：根据物理地址获取对应 granule 的索引
+    granule_from_idx：根据 granule 的索引获取对应的 granule 结构体
+}
+
+rmm_el3_ifc_gtsi_delegate：将 addr 物理地址的管理权转移到安全世界
+
+granule_set_state：设置 granule 的状态
+
+buffer_granule_memzero granule {
+    buffer_granule_map：将 granule 映射到虚拟地址
+    granule_memzero_mapped：清空虚拟地址
+}
+
+### smc_data_create
+
+1. rd_addr：rd 物理地址
+
+2. data_addr：data 物理地址
+
+3. map_addr：映射后的地址
+
+4. src_addr：源地址
+
+5. flags:
+
+data_create：{
+    find_lock_two_granules：获取 data_addr 和 rd_addr 对应的 granule 并锁定
+    validate_data_create_unknown: 验证参数 map_addr 是否合法 {
+        addr_in_par：判断当前 addr 是否在 Realm 的保护区中
+        validate_map_addr：验证 map_addr 是否在 Realm 的 IPA 范围类，并与指定级别对齐
+    }
+    s2tt_walk_lock_unlock: 在 Realm 的二级转换表（S2TT）中遍历并锁定特定的表项，直到达到指定的级别（level）
+
+}
+
+### smc_realm_create
+
+1. rd_addr：realm descriptor 物理地址
+
+2. realm_params_addr：realm 参数物理地址
+
+get_realm_params：通过 realm_params_addr 获取 realm 参数
+
+find_lock_rd_granules：获取 rd_addr 对应的 rd granule 以及 RTT granule 并锁定{
+    find_lock_granule：获取物理地址对应的 granule 并锁定
+}
+
+buffer_granule_map：将 granule 映射到虚拟地址 rd
+
+初始化 rd
+
+init_s2_starting_level：初始化 rd 的 stage 2 translate table starting level {
+    遍历所有的 rtt，
+        遍历所有的 rtte,
+            addr_in_par：判断当前 ipa 是否在受保护区域
+                s2tte_create_unassigned_empty：创建一个未分配的空的 s2tte
+                s2tte_create_unassigned_ns：创建一个未分配的 ns 的 s2tte
+            更新 ipa
+}
+
+### smc_rec_create
+
+1. rd_addr：rd 地址
+
+2. rec_addr：要创建的 rec 地址
+
+3. rec_params_addr： rec 参数地址
+
+> 一个 granule 结构体对应一个 granule 内存块，结构体描述 granule 内存块的信息
+
+find_granule：获取物理地址对应的 granule 结构体（从 bank 找到 granule）{
+    plat_granule_addr_to_idx：根据物理地址获取对应 granule 的索引
+    granule_from_idx：根据 granule 的索引获取对应的 granule 结构体
+}
+
+判断该 granule 是否已经是 GRANULE_STATE_NS
+
+ns_buffer_read：将 ns_gr 结构体对应的 granule 内存块中的数据读取到 dest 中 {
+    ns_buffer_granule_map：映射 ns_gr 结构体对应的 granule 内存块，返回映射后的地址 {
+        granule_addr：通过 granule 结构体获取 granule 内存块起始地址 {
+            plat_granule_idx_to_addr： 根据 granule 结构体在 bank 中的索引获取 granule 内存块的起始地址
+        }
+        > 为什么需要映射 granule 内存块：因为 granule 内存块的起始地址是物理地址，而我们需要的是虚拟地址，所以需要映射
+        buffer_arch_map：将 granule 内存块映射并返回映射后的地址 {
+            // Todo：需要深入了解
+            xlat_map_memory_page_with_attrs：将物理内存页面映射到指定的虚拟地址（VA），并设置相应的属性 {
+
+            }
+        }
+    }
+}
+
+### smc_rec_enter
+
+1. rec_addr：rec 物理地址
+
+2. rec_run_addr：rec run 物理地址
+
+初始化 rec_run.exit 为 0
+
+获取 rec_run_addr 对应的 granule 结构体 g_run
+
+find_lock_unused_granule：获取 rec_addr 对应的未使用 granule 结构体 g_rec
+
+atomic_granule_get：增加 g_rec 的 ref counter
+
+将 g_run 对应的 granule 内存数据 拷贝到 rec_run.enter
+
+获取 rec，rd 对象
+
+验证 realm 的 状态，合法性等
+
+拷贝 rec_run.enter 的 GIC（通用中断控制器）的状态到 rec->sysregs.gicstate
+
+完成一些必要的检查和操作
+
+### rec_run_loop
+
+1. rec：rec 结构体
+
+2. rmi_rec_exit：
+
+获取 ns_state，并于 rec 关联
+将证明堆与当前 CPU 关联。当 REC 运行时，此堆将用于证明 RSI 调用。
+保存 ns_state，并恢复 realm state、
+do {
+    检查和处理与定时器相关的挂起状态
+    激活需要的事件
+    恢复 Realm 的 PAuth 密钥
+    执行 Realm 代码
+    保存 Realm 的 PAuth 密钥
+    恢复 RMM 的 PAuth 密钥
+} while(处理 Realm 的退出)
+
+### 重要数据类型
+
+#### arm_dram
+
+结构体 arm_dram 存储了两个 bank 的信息，每个 bank 包含 granule 的信息，同时记录了每个 bank 的起始 granule index
+
+```c
+static struct arm_dram_layout arm_dram;
+/* Arm platform dram management structures */
+struct arm_dram_bank {
+    uint64_t base;            /* bank base address */
+    uint64_t size;            /* size of this bank */
+    /* This idx is a cumulative granule count of previous banks */
+    uint64_t start_gran_idx;    /* Start granule index for this bank */
+};
+
+struct arm_dram_layout {
+    unsigned long num_granules;    /* number of granules */
+    unsigned long num_banks;    /* number of dram banks */
+    struct arm_dram_bank bank[PLAT_ARM_MAX_DRAM_BANKS];
+                    /* Sorted array of DRAM banks */
+};
+```
+
+每个 granule 大小为 1 << GRANULE_SHIFT，即 4KB
+
+可以通过 granule idx 获取对应 granule state 实例
+
+```c
+IF_NCBMC(static) struct granule granules[RMM_MAX_GRANULES];
+```
+
+#### rd
+
+Realm 的描述符（Realm Descriptor）
+
+```c
+struct rd {
+    unsigned long state;     // Realm state
+    unsigned long rec_count; // Realm Execution Context Count
+    // 用于存储 Realm 的测量值。测量值是 Realm 的一个重要属性，用于验证 Realm 的完整性和真实性。
+    unsigned char measurement[MEASUREMENT_SLOT_NR][MAX_MEASUREMENT_SIZE];
+    // 用于存储 Realm 的第二阶段配置信息。第二阶段配置包括 Realm 的内存管理、中断处理等信息
+    struct s2tt_context s2_ctx;
+    // Realm 的辅助 REC（Realm Execution Context）颗粒的数量。辅助 REC 颗粒可能用于存储 Realm 的额外信息或资源。
+    unsigned int num_rec_aux;
+    enum hash_algo algorithm;    // Realm 测量值的哈希算法
+    bool pmu_enabled;            // 性能监控单元（PMU）是否在 Realm 中启用
+    unsigned int pmu_num_ctrs;   // Realm 中启用的 PMU 计数器的数量
+    struct simd_config simd_cfg; // Realm 的 SIMD（Single Instruction, Multiple Data）配置
+    unsigned char rpv[RPV_SIZE]; // Realm 的个性化值（Realm Personalization Value）。RPV 是一个 Realm 的唯一标识符，用于区分不同的 Realm
+};
+```
+
+s2tt_context: Realm 的二级页表（Stage 2 Translation）的配置
+
+```c
+struct s2tt_context {
+	unsigned int ipa_bits; // 虚拟地址（IPA，Intermediate Physical Address）的位数
+	int s2_starting_level; // 二级页表转换的起始级别
+	unsigned int num_root_rtts; // 起始级别的 RTT（Root Translation Table）的数量
+	struct granule *g_rtt; // 指向第一级 RTT 的 granule 结构体
+	unsigned int vmid; // 虚拟机标识符（VMID，Virtual Machine Identifier）
+	bool enable_lpa2; // 是否启用 LPA2（Large Physical Address Extension）
+};
+```
+
+#### rec
+
+Realm 执行上下文（Realm Execution Context，REC）
+
+```c
+struct rec {
+    struct granule *g_rec;    // the granule in which this REC lives
+    unsigned long rec_idx;    // REC index
+    bool runnable;          // 此 REC 是否可运行
+    REG_TYPE regs[RMM_REC_SAVED_GEN_REG_COUNT]; // 通用寄存器
+    REG_TYPE sp_el0;        // el0 stack pointer
+#ifndef CBMC
+    // PAuth state of Realm. 用于 Realm 的权限验证
+    struct pauth_state pauth;
+#endif /* CBMC*/
+    unsigned long pc; // program counter
+    unsigned long pstate; // pc state
+    STRUCT_TYPE sysreg_state sysregs; // system register state
+    STRUCT_TYPE common_sysreg_state common_sysregs; // common system register state，在所有 REC 中共享
+    // REC 发出 RIPAS（Realm IPA Space）更改请求时的相关信息
+    struct {
+        unsigned long base;
+        unsigned long top;
+        unsigned long addr;
+        enum ripas ripas_val;
+        enum ripas_change_destroyed change_destroyed;
+        enum ripas_response response;
+    } set_ripas; // ripas 设置信息
+    // 所有 REC 共享的 Realm 信息
+    struct {
+        struct granule *g_rd; // Realm 的 RD（Realm Descriptor）的 granule
+        bool pmu_enabled; // 是否启用 PMU
+        unsigned int pmu_num_ctrs; // PMU 计数器的数量
+        enum hash_algo algorithm; // Realm 测量值的哈希算法
+        struct simd_config simd_cfg; // SIMD 配置
+        struct s2tt_context s2_ctx; // Realm 的 S2TT（Stage 2 Translation Table）配置
+    } realm_info;
+    STRUCT_TYPE { // 保存 REC 上次因同步异常退出到主机时的系统寄存器状态
+        unsigned long esr; // 异常状态寄存器
+        unsigned long hpfar; // Hypervisor IPA Fault Address Register
+        unsigned long far; // Fault Address Register
+    } last_run_info;
+    struct ns_state *ns; // 指向每个 CPU 的非安全状态的指针
+    struct { // PSCI（Power State Coordination Interface）相关的信息
+        bool pending;
+    } psci_info;
+    unsigned int num_rec_aux;                    // 辅助 granules 的数量
+    struct granule *g_aux[MAX_REC_AUX_GRANULES]; // 辅助 granules 数组
+    struct rec_aux_data aux_data;                // 辅助数据
+    struct { // SError（同步错误）相关的信息
+        unsigned long vsesr_el2;
+        bool inject;
+    } serror_info;
+    bool host_call;                       // 是否有 host call 待处理
+    struct simd_context *active_simd_ctx; // 活动的 SIMD 上下文
+};
+```
+
+#### rmi_rec_run
+
+REC 进入和退出时 RMM 和 Host 的共享信息
+
+```c
+// shared information between RMM and Host（非安全世界） during REC entry and REC exit.
+struct rmi_rec_run {
+    SET_MEMBER_RMI(struct rmi_rec_enter enter, 0, 0x800);        // Entry information
+    SET_MEMBER_RMI(struct rmi_rec_exit exit, 0x800, 0x1000);    // Exit information
+
+};
+
+REC entry 时 Host 到 RMM 的信息
+
+struct rmi_rec_enter {
+    SET_MEMBER_RMI(unsigned long flags, 0, 0x200);                        // Flags 进入标志
+    SET_MEMBER_RMI(unsigned long gprs[REC_EXIT_NR_GPRS], 0x200, 0x300); // 通用寄存器值数组
+    SET_MEMBER_RMI(struct {
+            unsigned long gicv3_hcr;                    // GICv3 虚拟机控制寄存器
+            unsigned long gicv3_lrs[REC_GIC_NUM_LRS];    // GICv3 列表寄存器数组
+           }, 0x300, 0x800);
+};
+
+REC exit 时 RMM 到 Host 的信息
+
+struct rmi_rec_exit {
+    SET_MEMBER_RMI(unsigned long exit_reason, 0, 0x100);// Exit reason
+    SET_MEMBER_RMI(struct {
+            unsigned long esr;        // Exception Syndrome Register
+            unsigned long far;        // Fault Address Register
+            unsigned long hpfar;    // Hypervisor IPA Fault Address register
+           }, 0x100, 0x200);
+    SET_MEMBER_RMI(unsigned long gprs[REC_EXIT_NR_GPRS], 0x200, 0x300); // General-purpose registers
+    SET_MEMBER_RMI(struct {
+            unsigned long gicv3_hcr;    // GICv3 Hypervisor Control Register
+            unsigned long gicv3_lrs[REC_GIC_NUM_LRS]; // GICv3 List Registers
+            unsigned long gicv3_misr;    // GICv3 Maintenance Interrupt State Register
+            unsigned long gicv3_vmcr;    // GICv3 Virtual Machine Control Register
+           }, 0x300, 0x400);
+    SET_MEMBER_RMI(struct {
+            unsigned long cntp_ctl;        // Counter-timer Physical Timer Control Register
+            unsigned long cntp_cval;    // Counter-timer Physical Timer CompareValue Register
+            unsigned long cntv_ctl;        // Counter-timer Virtual Timer Control Register
+            unsigned long cntv_cval;    // Counter-timer Virtual Timer CompareValue Register
+           }, 0x400, 0x500);
+    SET_MEMBER_RMI(struct {
+            unsigned long ripas_base;    // Base address of pending RIPAS change
+            unsigned long ripas_top;    // Size of pending RIPAS change
+            unsigned char ripas_value;    // RIPAS value of pending RIPAS change
+           }, 0x500, 0x600);
+    SET_MEMBER_RMI(unsigned int imm, 0x600, 0x700);                // Host call immediate value
+    SET_MEMBER_RMI(unsigned long pmu_ovf_status, 0x700, 0x800);    // PMU overflow status
+};
+```
+
+### 内存模型
+
+不考虑 lpa2 的情况下，页表有 4 级，从 0 级到 3 级，总共是 48 bit
+
+### 别名
+
+1. s2：stage 2 阶段，将 ipa 转为 pa
+
+2. sl：starting level
+
+3. ripas：Realm Ipa status
+
+4. SIMD：Single Instruction, Multiple Data
+
+5. GPR：General Purpose Register
+
+6. Host：指非安全世界
+
+## 参考资料
+
+- [Realm Management Monitor Documentation](https://tf-rmm.readthedocs.io/en/latest/)
